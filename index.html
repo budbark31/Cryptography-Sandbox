@@ -135,4 +135,335 @@
             </div>
             <div class="arrow">↓</div>
             <div class="flow-row">
-                <div class="node" style="width: 280px;" onmouseover="showInfo
+                <div class="node" style="width: 280px;" onmouseover="showInfo('Main AES Rounds', 'This sequence repeats 9, 11, or 13 times depending on key size (128, 192, or 256 bits). It relies on a Substitution-Permutation Network.')">
+                    <div style="margin-bottom:5px;" class="node data" onmouseover="showInfo('Byte Substitution (S-Box)', 'Confusion layer: Each element of the state is nonlinearly transformed using lookup tables based on Galois field inverse operations. This prevents linear equation attacks.')">Byte Substitution Layer</div>
+                    <div style="margin-bottom:5px;" class="node data" onmouseover="showInfo('ShiftRows', 'Diffusion layer: Permutes the data on a byte level by cyclically shifting the rows of the state matrix. Row 0 by 0, Row 1 by 1, Row 2 by 2, Row 3 by 3.')">ShiftRows Layer</div>
+                    <div style="margin-bottom:5px;" class="node data" onmouseover="showInfo('MixColumn', 'Diffusion layer: A matrix operation in GF(2^8) which combines (mixes) blocks of four bytes. Ensures massive diffusion.')">MixColumn Layer</div>
+                    <div class="node key" onmouseover="showInfo('Key Addition', 'The current state matrix is combined with the subkey for this round through a bitwise XOR operation.')">Key Addition Layer</div>
+                </div>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="flow-row"><div class="node data" onmouseover="showInfo('128-bit Ciphertext', 'The final round omits the MixColumn transformation to make the encryption and decryption schemes symmetric.')">128-bit Ciphertext</div></div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>5.1 Encryption with Block Ciphers: Modes of Operation</h2>
+        
+        <h3>5.1.1 Electronic Codebook Mode (ECB)</h3>
+        <div class="diagram-container">
+            <div class="flow-row">
+                <div class="node data" onmouseover="showInfo('Plaintext Block 1 (x1)', 'The first block of the message (e.g., 128 bits for AES).')">x1</div>
+                <div style="width: 50px;"></div>
+                <div class="node data" onmouseover="showInfo('Plaintext Block 2 (x2)', 'The second block of the message.')">x2</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div><div style="width: 100px;"></div><div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the block independently using the secret key k. Highly deterministic: identical plaintexts result in identical ciphertexts.')">e_k()</div>
+                <div style="width: 50px;"></div>
+                <div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encryption is done separately. This allows parallel processing but leaves the mode susceptible to substitution attacks and traffic analysis.')">e_k()</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div><div style="width: 100px;"></div><div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node data" onmouseover="showInfo('Ciphertext 1 (y1)', 'The encrypted block. y1 = e_k(x1)')">y1</div>
+                <div style="width: 50px;"></div>
+                <div class="node data" onmouseover="showInfo('Ciphertext 2 (y2)', 'y2 = e_k(x2). If x1 equals x2, y1 will exactly equal y2.')">y2</div>
+            </div>
+        </div>
+
+        <h3>5.1.2 Cipher Block Chaining Mode (CBC)</h3>
+        <div class="diagram-container">
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('Initialization Vector (IV)', 'A nonce used to randomize the encryption. It ensures that encrypting the same message twice yields different ciphertexts. It does not need to be kept secret.')">IV</div>
+                <div class="arrow">→</div>
+                <div class="node xor" onmouseover="showInfo('XOR', 'XORs the Initialization Vector with the first plaintext block.')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Plaintext Block 1 (x1)', 'The first data block.')">x1</div>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="flow-row"><div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the XORed result. y1 = e_k(x1 ⊕ IV)')">e_k()</div></div>
+            <div class="arrow">↓</div>
+            <div class="flow-row">
+                <div class="node data" onmouseover="showInfo('Ciphertext 1 (y1)', 'The first ciphertext block. This is fed back to be XORed with the next plaintext block (Chaining).')">y1</div>
+                <div class="arrow">→</div>
+                <div class="node xor" onmouseover="showInfo('XOR', 'Chains the encryption by XORing the previous ciphertext block (y1) with the current plaintext block (x2).')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Plaintext Block 2 (x2)', 'The second data block.')">x2</div>
+            </div>
+            <div style="margin-left: 170px;" class="arrow">↓</div>
+            <div class="flow-row"><div style="margin-left: 170px;" class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the chained block. y2 = e_k(x2 ⊕ y1)')">e_k()</div></div>
+            <div style="margin-left: 170px;" class="arrow">↓</div>
+            <div class="flow-row"><div style="margin-left: 170px;" class="node data" onmouseover="showInfo('Ciphertext 2 (y2)', 'The second ciphertext block.')">y2</div></div>
+        </div>
+
+        <h3>5.1.3 Output Feedback Mode (OFB)</h3>
+        <div class="diagram-container">
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('Initialization Vector (IV)', 'A nonce. In OFB mode, the block cipher operates as a synchronous stream cipher.')">IV</div>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the IV. Note that the block cipher computations are independent of the plaintext, allowing precomputation of the keystream.')">e_k()</div>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="flow-row">
+                <div class="node data" onmouseover="showInfo('Keystream Block 1 (s1)', 's1 = e_k(IV). This keystream block is fed back into the cipher to generate the next keystream block.')">s1</div>
+                <div class="arrow">→</div>
+                <div class="node xor" onmouseover="showInfo('XOR', 'The actual encryption is done here. y1 = s1 ⊕ x1.')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Plaintext 1 (x1)', 'The message block.')">x1</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow" style="margin-right: 170px;">↓</div><div style="width: 50px;"></div><div class="arrow" style="margin-left: -50px;">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node key" style="margin-right: 120px;" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the previous keystream block to generate the next one. s2 = e_k(s1).')">e_k()</div>
+                <div class="node data" onmouseover="showInfo('Ciphertext 1 (y1)', 'The resulting ciphertext block.')">y1</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow" style="margin-right: 170px;">↓</div>
+            </div>
+             <div class="flow-row">
+                <div class="node data" onmouseover="showInfo('Keystream Block 2 (s2)', 's2 = e_k(s1)')">s2</div>
+                <div class="arrow">→</div>
+                <div class="node xor" onmouseover="showInfo('XOR', 'y2 = s2 ⊕ x2')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Plaintext 2 (x2)', 'The second message block.')">x2</div>
+            </div>
+        </div>
+
+        <h3>5.1.4 Cipher Feedback Mode (CFB)</h3>
+        <div class="diagram-container">
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('Initialization Vector (IV)', 'A nonce. In CFB mode, the block cipher is used to build an asynchronous stream cipher.')">IV</div>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the IV to generate the first keystream block.')">e_k()</div>
+            </div>
+            <div class="arrow">↓</div>
+            <div class="flow-row">
+                <div style="width: 160px;"></div>
+                <div class="node xor" onmouseover="showInfo('XOR', 'y1 = e_k(IV) ⊕ x1.')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Plaintext 1 (x1)', 'The message block.')">x1</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow" style="margin-left: 200px; transform: rotate(180deg) translateX(30px) translateY(-20px); position: absolute;">↱</div>
+                <div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node key" style="margin-right: 50px;" onmouseover="showInfo('Block Cipher e_k()', 'Unlike OFB, CFB feeds the CIPHERTEXT back into the block cipher algorithm. y2 = e_k(y1) ⊕ x2.')">e_k()</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Ciphertext 1 (y1)', 'The ciphertext is fed back to become the input for the next block cipher operation.')">y1</div>
+            </div>
+             <div class="flow-row">
+                <div class="arrow" style="margin-right: 170px;">↓</div>
+            </div>
+             <div class="flow-row">
+                <div class="node xor" style="margin-right: 0px;" onmouseover="showInfo('XOR', 'y2 = e_k(y1) ⊕ x2')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Plaintext 2 (x2)', 'The second message block.')">x2</div>
+            </div>
+             <div class="arrow">↓</div>
+             <div class="flow-row"><div class="node data" onmouseover="showInfo('Ciphertext 2 (y2)', 'The second ciphertext block.')">y2</div></div>
+        </div>
+
+        <h3>5.1.5 Counter Mode (CTR)</h3>
+        <div class="diagram-container">
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('IV || CTR 1', 'A nonce (IV) concatenated with a counter. Evaluates to a unique input for every single block.')">IV || CTR 1</div>
+                <div style="width: 50px;"></div>
+                <div class="node key" onmouseover="showInfo('IV || CTR 2', 'The counter is incremented (e.g., CTR_2 = CTR_1 + 1).')">IV || CTR 2</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div><div style="width: 170px;"></div><div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the Counter. This creates a keystream. Because there is no feedback loop, blocks can be encrypted in parallel!')">e_k()</div>
+                <div style="width: 50px;"></div>
+                <div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Parallel execution allows for extremely high throughput.')">e_k()</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div><div style="width: 170px;"></div><div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node xor" onmouseover="showInfo('XOR', 'y1 = e_k(IV||CTR_1) ⊕ x1')">⊕</div>
+                <div class="arrow">←</div><div class="node data" onmouseover="showInfo('Plaintext 1 (x1)', 'The actual message.')">x1</div>
+                <div style="width: 20px;"></div>
+                <div class="node xor" onmouseover="showInfo('XOR', 'y2 = e_k(IV||CTR_2) ⊕ x2')">⊕</div>
+                <div class="arrow">←</div><div class="node data" onmouseover="showInfo('Plaintext 2 (x2)', 'The next block of the message.')">x2</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow" style="margin-right: 120px;">↓</div><div style="width: 50px;"></div><div class="arrow" style="margin-right: 120px;">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node data" style="margin-right: 120px;" onmouseover="showInfo('Ciphertext 1 (y1)', 'The final encrypted block.')">y1</div>
+                <div style="width: 50px;"></div>
+                <div class="node data" style="margin-right: 120px;" onmouseover="showInfo('Ciphertext 2 (y2)', 'The second encrypted block.')">y2</div>
+            </div>
+        </div>
+
+        <h3>5.1.6 Galois Counter Mode (GCM)</h3>
+        <p style="text-align: center;">Provides both Confidentiality (via CTR mode) and Authentication (via MAC).</p>
+        <div class="diagram-container">
+            <div class="flow-row">
+                <div class="node data" onmouseover="showInfo('Additional Authenticated Data (AAD)', 'Data left in the clear (like network headers) but authenticated.')">AAD</div>
+                <div style="width: 50px;"></div>
+                <div class="node key" onmouseover="showInfo('Hash Subkey (H)', 'Generated by encrypting the all-zero input with the block cipher: H = e_k(0).')">H</div>
+                <div style="width: 50px;"></div>
+                <div class="node key" onmouseover="showInfo('Counter (CTR 1)', 'Derived from an IV and incremented for CTR mode encryption.')">CTR 1</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div><div style="width: 170px;"></div><div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node auth" onmouseover="showInfo('Galois Field Multiplication', 'g_0 = AAD × H. Multiplication happens in the finite field GF(2^128).')">GF Mult</div>
+                <div style="width: 150px;"></div>
+                <div class="node key" onmouseover="showInfo('Block Cipher e_k()', 'Encrypts the counter for CTR mode.')">e_k()</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div><div style="width: 170px;"></div><div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                <div class="node xor" onmouseover="showInfo('XOR', 'The intermediate auth parameter is XORed with the ciphertext.')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Ciphertext 1 (y1)', 'y1 = e_k(CTR_1) ⊕ x1. CTR mode encryption protects confidentiality.')">y1</div>
+                <div class="arrow">←</div>
+                <div class="node xor" onmouseover="showInfo('XOR', 'XOR keystream with plaintext.')">⊕</div>
+                <div class="arrow">←</div>
+                <div class="node data" onmouseover="showInfo('Plaintext 1 (x1)', 'The data to encrypt.')">x1</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div>
+            </div>
+            <div class="flow-row">
+                 <div class="node auth" onmouseover="showInfo('Galois Field Multiplication', 'g_1 = (g_0 ⊕ y1) × H. This chains the authentication.')">GF Mult</div>
+            </div>
+            <div class="flow-row">
+                <div class="arrow">↓</div>
+            </div>
+             <div class="flow-row">
+                 <div class="node data" style="background-color: #e67e22;" onmouseover="showInfo('Authentication Tag (T)', 'T = (g_n × H) ⊕ e_k(CTR_0). Protects the integrity and authenticity of the message and AAD.')">Auth Tag (T)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Live Crypto Sandbox</h2>
+        <div class="controls">
+            <div>
+                <label>Algorithm:</label>
+                <select id="algorithm">
+                    <option value="AES">AES</option>
+                    <option value="DES">DES</option>
+                    <option value="TripleDES">3DES</option>
+                </select>
+            </div>
+            <div>
+                <label>Mode of Operation:</label>
+                <select id="mode">
+                    <option value="CBC">CBC (Cipher Block Chaining)</option>
+                    <option value="ECB">ECB (Electronic Codebook - Insecure)</option>
+                    <option value="CFB">CFB (Cipher Feedback)</option>
+                    <option value="OFB">OFB (Output Feedback)</option>
+                    <option value="CTR">CTR (Counter)</option>
+                </select>
+            </div>
+            <div class="full-width">
+                <label>Input Text (Plaintext or Base64 Ciphertext):</label>
+                <textarea id="inputText" placeholder="Enter text here..."></textarea>
+            </div>
+            <div>
+                <label>Secret Key:</label>
+                <input type="text" id="secretKey" value="MySuperSecretKey">
+            </div>
+            <div>
+                <label>Initialization Vector (IV):</label>
+                <input type="text" id="iv" value="1234567890123456">
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button onclick="processData('encrypt')">Encrypt</button>
+            <button class="btn-decrypt" onclick="processData('decrypt')">Decrypt</button>
+        </div>
+
+        <label>Result:</label>
+        <div id="result-box">Your output will appear here...</div>
+    </div>
+</div>
+
+<script>
+    // Handles the interactive diagram hover updates
+    function showInfo(title, description) {
+        document.getElementById('info-title').innerText = title;
+        document.getElementById('info-desc').innerText = description;
+    }
+
+    // Handles the Sandbox Logic
+    function processData(action) {
+        const inputText = document.getElementById('inputText').value;
+        const secretKey = document.getElementById('secretKey').value;
+        const algoSelection = document.getElementById('algorithm').value;
+        const modeSelection = document.getElementById('mode').value;
+        const ivInput = document.getElementById('iv').value;
+        const resultBox = document.getElementById('result-box');
+
+        if (!inputText || !secretKey) {
+            resultBox.innerText = "Error: Please provide both Input Text and a Secret Key.";
+            return;
+        }
+
+        let options = {};
+        if (ivInput && modeSelection !== "ECB") {
+             options.iv = CryptoJS.enc.Utf8.parse(ivInput);
+        }
+
+        if (modeSelection === "ECB") options.mode = CryptoJS.mode.ECB;
+        if (modeSelection === "CBC") options.mode = CryptoJS.mode.CBC;
+        if (modeSelection === "CFB") options.mode = CryptoJS.mode.CFB;
+        if (modeSelection === "OFB") options.mode = CryptoJS.mode.OFB;
+        if (modeSelection === "CTR") options.mode = CryptoJS.mode.CTR;
+        
+        options.padding = CryptoJS.pad.Pkcs7;
+
+        try {
+            let result = "";
+            let cipherObject = CryptoJS[algoSelection];
+
+            if (action === 'encrypt') {
+                const encrypted = cipherObject.encrypt(inputText, secretKey, options);
+                result = encrypted.toString();
+            } else if (action === 'decrypt') {
+                const decrypted = cipherObject.decrypt(inputText, secretKey, options);
+                result = decrypted.toString(CryptoJS.enc.Utf8);
+                if (!result) throw new Error("Decryption failed. Wrong key, mode, or invalid ciphertext.");
+            }
+            resultBox.innerText = result;
+        } catch (error) {
+            resultBox.innerText = "Error: " + error.message;
+        }
+    }
+
+    document.getElementById('algorithm').addEventListener('change', function() {
+        const modeSelect = document.getElementById('mode');
+        const ivInput = document.getElementById('iv');
+        if (this.value === 'AES') {
+            modeSelect.disabled = false;
+            ivInput.disabled = false;
+        } else {
+            // CryptoJS supports modes for DES/3DES, but for simplicity in the demo we can restrict or just let them use it.
+            // Let's enable them to see ECB vs CBC in DES too.
+            modeSelect.disabled = false;
+            ivInput.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>
