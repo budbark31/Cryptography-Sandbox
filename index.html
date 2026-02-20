@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Cryptography Sandbox</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .full-width {
+            grid-column: span 2;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+        }
+        select, input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+        textarea {
+            resize: vertical;
+            height: 100px;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            flex: 1;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .btn-decrypt {
+            background-color: #e67e22;
+        }
+        .btn-decrypt:hover {
+            background-color: #d35400;
+        }
+        #result-box {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            word-wrap: break-word;
+            min-height: 50px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Cipher Interactive Sandbox</h1>
+    <p style="text-align: center;">Experiment with DES, 3DES, AES, and block cipher modes in real-time.</p>
+
+    <div class="controls">
+        <div>
+            <label for="algorithm">Algorithm:</label>
+            <select id="algorithm">
+                <option value="AES">AES (Advanced Encryption Standard)</option>
+                <option value="DES">DES (Data Encryption Standard)</option>
+                <option value="TripleDES">3DES (Triple DES)</option>
+            </select>
+        </div>
+        
+        <div>
+            <label for="mode">AES Mode of Operation:</label>
+            <select id="mode">
+                <option value="CBC">CBC (Cipher Block Chaining - Secure)</option>
+                <option value="ECB">ECB (Electronic Codebook - Insecure)</option>
+                <option value="CTR">CTR (Counter - Fast & Secure)</option>
+            </select>
+        </div>
+
+        <div class="full-width">
+            <label for="inputText">Input Text (Plaintext or Ciphertext):</label>
+            <textarea id="inputText" placeholder="Enter text here..."></textarea>
+        </div>
+
+        <div>
+            <label for="secretKey">Secret Key:</label>
+            <input type="text" id="secretKey" placeholder="Enter a secret phrase" value="MySuperSecretKey">
+        </div>
+
+        <div>
+            <label for="iv">Initialization Vector (IV):</label>
+            <input type="text" id="iv" placeholder="Optional (Used in CBC/CTR)" value="1234567890123456">
+        </div>
+    </div>
+
+    <div class="buttons">
+        <button onclick="processData('encrypt')">Encrypt</button>
+        <button class="btn-decrypt" onclick="processData('decrypt')">Decrypt</button>
+    </div>
+
+    <label>Result:</label>
+    <div id="result-box">Your output will appear here...</div>
+</div>
+
+<script>
+    function processData(action) {
+        const inputText = document.getElementById('inputText').value;
+        const secretKey = document.getElementById('secretKey').value;
+        const algoSelection = document.getElementById('algorithm').value;
+        const modeSelection = document.getElementById('mode').value;
+        const ivInput = document.getElementById('iv').value;
+        const resultBox = document.getElementById('result-box');
+
+        if (!inputText || !secretKey) {
+            resultBox.innerText = "Error: Please provide both Input Text and a Secret Key.";
+            return;
+        }
+
+        // Configure options (Mode and IV)
+        let options = {};
+        
+        // Parse IV using UTF-8
+        if (ivInput) {
+            options.iv = CryptoJS.enc.Utf8.parse(ivInput);
+        }
+
+        // Set the mode dynamically based on user selection
+        if (modeSelection === "ECB") options.mode = CryptoJS.mode.ECB;
+        if (modeSelection === "CBC") options.mode = CryptoJS.mode.CBC;
+        if (modeSelection === "CTR") options.mode = CryptoJS.mode.CTR;
+        
+        // Add padding standard
+        options.padding = CryptoJS.pad.Pkcs7;
+
+        try {
+            let result = "";
+            let cipherObject = CryptoJS[algoSelection]; // Dynamically call CryptoJS.AES, CryptoJS.DES, etc.
+
+            if (action === 'encrypt') {
+                const encrypted = cipherObject.encrypt(inputText, secretKey, options);
+                result = encrypted.toString();
+            } else if (action === 'decrypt') {
+                const decrypted = cipherObject.decrypt(inputText, secretKey, options);
+                result = decrypted.toString(CryptoJS.enc.Utf8);
+                
+                if (!result) {
+                    throw new Error("Decryption failed. Wrong key, mode, or invalid ciphertext.");
+                }
+            }
+
+            resultBox.innerText = result;
+        } catch (error) {
+            resultBox.innerText = "Error: " + error.message;
+        }
+    }
+
+    // Disable Mode/IV inputs if DES or 3DES is selected to keep the demo simple
+    document.getElementById('algorithm').addEventListener('change', function() {
+        const modeSelect = document.getElementById('mode');
+        const ivInput = document.getElementById('iv');
+        if (this.value === 'AES') {
+            modeSelect.disabled = false;
+            ivInput.disabled = false;
+        } else {
+            modeSelect.disabled = true;
+            ivInput.disabled = true;
+            modeSelect.value = "CBC"; // Default fallback
+        }
+    });
+</script>
+
+</body>
+</html>
