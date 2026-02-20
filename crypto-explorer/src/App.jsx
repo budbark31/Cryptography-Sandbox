@@ -4,7 +4,6 @@ import InfoPanel from './components/InfoPanel';
 import CryptoSandbox from './components/CryptoSandbox';
 import AESDiagram from './components/diagrams/AESDiagram';
 import DESDiagram from './components/diagrams/DESDiagram';
-import TripleDESDiagram from './components/diagrams/TripleDESDiagram';
 import ECBDiagram from './components/diagrams/ECBDiagram';
 import CBCDiagram from './components/diagrams/CBCDiagram';
 import OFBDiagram from './components/diagrams/OFBDiagram';
@@ -53,12 +52,8 @@ function App() {
               <AESDiagram onHover={setInfo} />
             </div>
             <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800 mb-4">DES</h2>
+              <h2 className="text-xl font-bold text-slate-800 mb-4">DES / 3DES</h2>
               <DESDiagram onHover={setInfo} />
-            </div>
-            <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800 mb-4">Triple DES (3DES)</h2>
-              <TripleDESDiagram onHover={setInfo} />
             </div>
             <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
               <h2 className="text-xl font-bold text-slate-800 mb-2">ECB Mode</h2>

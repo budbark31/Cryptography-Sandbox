@@ -131,6 +131,36 @@ const desInfo = {
     title: 'Ciphertext y (64 bits)',
     description: 'The encrypted output. DES is a symmetric cipher, so decryption uses the same algorithm with subkeys in reverse order (k₁₆, k₁₅, ..., k₁).',
     formula: 'y = DESₖ(x)'
+  },
+  tripleDes: {
+    title: 'Triple DES (3DES)',
+    description: 'Applies DES three times with two or three independent keys. The EDE (Encrypt-Decrypt-Encrypt) structure provides backward compatibility: using k₁=k₂=k₃ reduces to single DES.',
+    formula: 'y = DES_{k₃}(DES⁻¹_{k₂}(DES_{k₁}(x)))'
+  },
+  tdesKey1: {
+    title: 'Key k₁ (56 bits effective)',
+    description: 'First key used for encryption in step 1. In 2-key 3DES, k₁ = k₃.',
+    formula: 'DES_{k₁}(x)'
+  },
+  tdesKey2: {
+    title: 'Key k₂ (56 bits effective)',
+    description: 'Second key used for DECRYPTION in step 2. Using decryption in the middle provides backward compatibility with single DES when all keys are equal.',
+    formula: 'DES⁻¹_{k₂}(·)'
+  },
+  tdesKey3: {
+    title: 'Key k₃ (56 bits effective)',
+    description: 'Third key used for encryption in step 3. In 2-key 3DES (keying option 2), k₃ = k₁.',
+    formula: 'DES_{k₃}(·)'
+  },
+  tdes2key: {
+    title: '2-Key 3DES (Keying Option 2)',
+    description: 'Uses only 2 independent keys: k₁ = k₃. Effective key length is 112 bits. This is still widely used but being phased out.',
+    formula: 'y = DES_{k₁}(DES⁻¹_{k₂}(DES_{k₁}(x)))'
+  },
+  tdes3key: {
+    title: '3-Key 3DES (Keying Option 1)',
+    description: 'Uses 3 independent keys. Effective key length is 168 bits. Provides the strongest security of 3DES variants.',
+    formula: 'y = DES_{k₃}(DES⁻¹_{k₂}(DES_{k₁}(x)))'
   }
 };
 
@@ -151,7 +181,8 @@ export default function DESDiagram({ onHover }) {
     { id: 'feistel', label: 'Feistel Structure' },
     { id: 'ffunction', label: 'f-Function' },
     { id: 'keyschedule', label: 'Key Schedule' },
-    { id: 'sboxes', label: 'S-Boxes' }
+    { id: 'sboxes', label: 'S-Boxes' },
+    { id: '3des', label: '3DES' }
   ];
 
   return (
@@ -178,6 +209,7 @@ export default function DESDiagram({ onHover }) {
       {activeTab === 'ffunction' && <FFunctionView hovered={hovered} handleHover={handleHover} setHovered={setHovered} />}
       {activeTab === 'keyschedule' && <KeyScheduleView hovered={hovered} handleHover={handleHover} setHovered={setHovered} />}
       {activeTab === 'sboxes' && <SBoxView selectedSbox={selectedSbox} setSelectedSbox={setSelectedSbox} sboxInput={sboxInput} setSboxInput={setSboxInput} />}
+      {activeTab === '3des' && <TripleDESView hovered={hovered} handleHover={handleHover} setHovered={setHovered} />}
     </div>
   );
 }
@@ -691,6 +723,157 @@ function SBoxView({ selectedSbox, setSelectedSbox, sboxInput, setSboxInput }) {
       <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600">
         <strong>S-Box Lookup:</strong> The 6-bit input is split: outer bits (1 and 6) select the row (0-3), middle 4 bits (2-5) select the column (0-15). 
         The table entry gives the 4-bit output. This is the ONLY nonlinear operation in DES.
+      </div>
+    </>
+  );
+}
+
+// ============ 3DES / TRIPLE DES (Fig. 3.19) ============
+function TripleDESView({ hovered, handleHover, setHovered }) {
+  const [keyingOption, setKeyingOption] = useState(2); // 2-key or 3-key
+
+  return (
+    <>
+      <div className="mb-4">
+        <div className="text-sm font-medium text-slate-700 mb-2">Keying Option:</div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setKeyingOption(2)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+              keyingOption === 2
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            2-Key (k₁ = k₃)
+          </button>
+          <button
+            onClick={() => setKeyingOption(3)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+              keyingOption === 3
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            3-Key (Independent)
+          </button>
+        </div>
+      </div>
+
+      <svg viewBox="0 0 400 380" className="w-full max-w-lg mx-auto">
+        <defs>
+          <marker id="tdesArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#64748b" />
+          </marker>
+        </defs>
+
+        {/* Title */}
+        <text x="200" y="20" textAnchor="middle" className="text-sm fill-slate-700 font-semibold">
+          Triple DES (3DES) - EDE Mode (Fig. 3.19)
+        </text>
+
+        {/* Plaintext */}
+        <g onMouseEnter={() => handleHover('plaintext')} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+          <rect x={155} y={35} width={90} height={24} rx="3" fill={hovered === 'plaintext' ? '#dbeafe' : '#f1f5f9'} stroke="#64748b" />
+          <text x={200} y={51} textAnchor="middle" className="text-[10px] fill-slate-700">Plaintext x</text>
+        </g>
+        <line x1={200} y1={59} x2={200} y2={80} stroke="#64748b" markerEnd="url(#tdesArrow)" />
+        <text x={210} y={72} className="text-[8px] fill-slate-500">64</text>
+
+        {/* DES Encrypt with k1 */}
+        <g onMouseEnter={() => handleHover('tdesKey1')} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+          <rect x={130} y={82} width={140} height={50} rx="4" fill={hovered === 'tdesKey1' ? '#dbeafe' : '#dcfce7'} stroke="#22c55e" strokeWidth="2" />
+          <text x={200} y={102} textAnchor="middle" className="text-[11px] fill-slate-700 font-medium">DES Encrypt</text>
+          <text x={200} y={120} textAnchor="middle" className="text-[9px] fill-slate-500">16 rounds with k₁</text>
+        </g>
+        {/* k1 input */}
+        <line x1={310} y1={107} x2={270} y2={107} stroke="#64748b" markerEnd="url(#tdesArrow)" />
+        <rect x={310} y={95} width={50} height={24} rx="3" fill="#fef3c7" stroke="#f59e0b" />
+        <text x={335} y={111} textAnchor="middle" className="text-[10px] fill-slate-700 font-mono font-medium">k₁</text>
+        <text x={335} y={130} textAnchor="middle" className="text-[8px] fill-slate-500">56 bits</text>
+
+        <line x1={200} y1={132} x2={200} y2={155} stroke="#64748b" markerEnd="url(#tdesArrow)" />
+        <text x={210} y={147} className="text-[8px] fill-slate-500">64</text>
+
+        {/* DES Decrypt with k2 */}
+        <g onMouseEnter={() => handleHover('tdesKey2')} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+          <rect x={130} y={157} width={140} height={50} rx="4" fill={hovered === 'tdesKey2' ? '#dbeafe' : '#fee2e2'} stroke="#ef4444" strokeWidth="2" />
+          <text x={200} y={177} textAnchor="middle" className="text-[11px] fill-slate-700 font-medium">DES Decrypt</text>
+          <text x={200} y={195} textAnchor="middle" className="text-[9px] fill-slate-500">16 rounds with k₂ (reversed)</text>
+        </g>
+        {/* k2 input */}
+        <line x1={310} y1={182} x2={270} y2={182} stroke="#64748b" markerEnd="url(#tdesArrow)" />
+        <rect x={310} y={170} width={50} height={24} rx="3" fill="#dbeafe" stroke="#3b82f6" />
+        <text x={335} y={186} textAnchor="middle" className="text-[10px] fill-slate-700 font-mono font-medium">k₂</text>
+        <text x={335} y={205} textAnchor="middle" className="text-[8px] fill-slate-500">56 bits</text>
+
+        <line x1={200} y1={207} x2={200} y2={230} stroke="#64748b" markerEnd="url(#tdesArrow)" />
+        <text x={210} y={222} className="text-[8px] fill-slate-500">64</text>
+
+        {/* DES Encrypt with k3 */}
+        <g onMouseEnter={() => handleHover('tdesKey3')} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+          <rect x={130} y={232} width={140} height={50} rx="4" fill={hovered === 'tdesKey3' ? '#dbeafe' : '#dcfce7'} stroke="#22c55e" strokeWidth="2" />
+          <text x={200} y={252} textAnchor="middle" className="text-[11px] fill-slate-700 font-medium">DES Encrypt</text>
+          <text x={200} y={270} textAnchor="middle" className="text-[9px] fill-slate-500">16 rounds with k₃</text>
+        </g>
+        {/* k3 input */}
+        <line x1={310} y1={257} x2={270} y2={257} stroke="#64748b" markerEnd="url(#tdesArrow)" />
+        <rect x={310} y={245} width={50} height={24} rx="3" fill={keyingOption === 2 ? '#fef3c7' : '#fce7f3'} stroke={keyingOption === 2 ? '#f59e0b' : '#ec4899'} />
+        <text x={335} y={261} textAnchor="middle" className="text-[10px] fill-slate-700 font-mono font-medium">
+          {keyingOption === 2 ? 'k₁' : 'k₃'}
+        </text>
+        <text x={335} y={280} textAnchor="middle" className="text-[8px] fill-slate-500">56 bits</text>
+
+        {/* 2-key indication */}
+        {keyingOption === 2 && (
+          <g>
+            <path d="M365,107 Q380,107 380,140 L380,245 Q380,261 365,261" fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4,2" />
+            <text x={387} y={184} className="text-[8px] fill-amber-600" textAnchor="start">same</text>
+          </g>
+        )}
+
+        <line x1={200} y1={282} x2={200} y2={310} stroke="#64748b" markerEnd="url(#tdesArrow)" />
+        <text x={210} y={300} className="text-[8px] fill-slate-500">64</text>
+
+        {/* Ciphertext */}
+        <g onMouseEnter={() => handleHover('ciphertext')} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+          <rect x={150} y={312} width={100} height={24} rx="3" fill={hovered === 'ciphertext' ? '#d1fae5' : '#f1f5f9'} stroke="#64748b" />
+          <text x={200} y={328} textAnchor="middle" className="text-[10px] fill-slate-700">Ciphertext y</text>
+        </g>
+
+        {/* Formula */}
+        <rect x={70} y={345} width={260} height={28} rx="4" fill="#f8fafc" stroke="#e2e8f0" />
+        <text x={200} y={363} textAnchor="middle" className="text-[9px] fill-slate-600 font-mono">
+          {keyingOption === 2 
+            ? 'y = DES_{k₁}( DES⁻¹_{k₂}( DES_{k₁}(x) ) )' 
+            : 'y = DES_{k₃}( DES⁻¹_{k₂}( DES_{k₁}(x) ) )'}
+        </text>
+
+        {/* Labels on left */}
+        <text x={60} y={107} textAnchor="middle" className="text-[9px] fill-slate-500">Step 1</text>
+        <text x={60} y={182} textAnchor="middle" className="text-[9px] fill-slate-500">Step 2</text>
+        <text x={60} y={257} textAnchor="middle" className="text-[9px] fill-slate-500">Step 3</text>
+      </svg>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className={`p-3 rounded-lg border text-xs ${
+          keyingOption === 2 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'
+        }`}>
+          <div className="font-medium text-slate-700 mb-1">2-Key 3DES</div>
+          <div className="text-slate-600">k₁ = k₃, k₂ independent</div>
+          <div className="text-slate-500 mt-1">Effective: <strong>112 bits</strong></div>
+        </div>
+        <div className={`p-3 rounded-lg border text-xs ${
+          keyingOption === 3 ? 'bg-pink-50 border-pink-200' : 'bg-slate-50 border-slate-200'
+        }`}>
+          <div className="font-medium text-slate-700 mb-1">3-Key 3DES</div>
+          <div className="text-slate-600">k₁, k₂, k₃ all independent</div>
+          <div className="text-slate-500 mt-1">Effective: <strong>168 bits</strong></div>
+        </div>
+      </div>
+
+      <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600">
+        <strong>EDE Mode:</strong> Encrypt-Decrypt-Encrypt. The middle decryption step provides backward compatibility: if k₁=k₂=k₃, the result equals single DES encryption. 3DES is being phased out in favor of AES.
       </div>
     </>
   );
