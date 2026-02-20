@@ -140,8 +140,8 @@ function RoundOverview({ hovered, handleHover, setHovered }) {
   
   // Section Y positions
   const yA = 35;
-  const ySbox = yA + 4 * (cellH + rowGap) + 25;
-  const yB = ySbox + 35;
+  const ySbox = yA + 4 * (cellH + rowGap) + 15;
+  const yB = ySbox + 4 * (cellH + rowGap) + 15;
   const yC = yB + 4 * (cellH + rowGap) + 90;
   const yKeyAdd = yC + 4 * (cellH + rowGap) + 35;
 
@@ -150,7 +150,7 @@ function RoundOverview({ hovered, handleHover, setHovered }) {
 
   return (
     <div>
-      <svg viewBox="0 0 480 510" className="w-full max-w-2xl mx-auto">
+      <svg viewBox="0 0 480 720" className="w-full max-w-2xl mx-auto">
         {/* Title */}
         <text x="240" y="18" textAnchor="middle" className="text-xs fill-slate-500 font-medium">
           Fig. 4.3 — AES round function for rounds 1, 2, ..., nᵣ − 1
@@ -182,7 +182,7 @@ function RoundOverview({ hovered, handleHover, setHovered }) {
           ))}
         </g>
 
-        {/* Arrows down to S-boxes */}
+        {/* Arrows down from A to S-boxes */}
         {[0,1,2,3].map(row => (
           <g key={row}>
             {[0,1,2,3].map(col => (
@@ -191,7 +191,7 @@ function RoundOverview({ hovered, handleHover, setHovered }) {
                 x1={gridX(col) + cellW/2} 
                 y1={gridY(row, yA) + cellH}
                 x2={gridX(col) + cellW/2} 
-                y2={ySbox - 12}
+                y2={gridY(row, ySbox) - 10}
                 stroke="#94a3b8" strokeWidth="1"
               />
             ))}
@@ -199,32 +199,36 @@ function RoundOverview({ hovered, handleHover, setHovered }) {
         ))}
 
         {/* Label: Byte Substitution */}
-        <text x="50" y={ySbox + 5} textAnchor="end" className="text-[9px] fill-slate-400">SubBytes</text>
+        <text x="50" y={ySbox + 50} textAnchor="end" className="text-[9px] fill-slate-400">SubBytes</text>
 
-        {/* ===== S-BOXES (single row) ===== */}
+        {/* ===== S-BOXES (4x4 grid, one per cell) ===== */}
         <g onMouseEnter={() => handleHover('subBytes')} onMouseLeave={() => setHovered(null)}>
-          {[0,1,2,3].map(col => (
-            <g key={col}>
-              <circle 
-                cx={gridX(col) + cellW/2} cy={ySbox} r="11" 
-                fill={hovered === 'subBytes' ? '#dbeafe' : '#f8fafc'} 
-                stroke={hovered === 'subBytes' ? '#3b82f6' : '#64748b'} 
-                strokeWidth="1.5" 
-                style={{ cursor: 'pointer' }}
-              />
-              <text x={gridX(col) + cellW/2} y={ySbox + 4} textAnchor="middle" className="text-[10px] fill-slate-600">S</text>
+          {[0,1,2,3].map(row => (
+            <g key={row}>
+              {[0,1,2,3].map(col => (
+                <g key={col}>
+                  <circle 
+                    cx={gridX(col) + cellW/2} cy={gridY(row, ySbox)} r="9" 
+                    fill={hovered === 'subBytes' ? '#dbeafe' : '#f8fafc'} 
+                    stroke={hovered === 'subBytes' ? '#3b82f6' : rowColors[row]} 
+                    strokeWidth="1.5" 
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <text x={gridX(col) + cellW/2} y={gridY(row, ySbox) + 3} textAnchor="middle" className="text-[8px] fill-slate-600">S</text>
+                </g>
+              ))}
             </g>
           ))}
         </g>
 
-        {/* Arrows down to B */}
+        {/* Arrows down from S to B */}
         {[0,1,2,3].map(row => (
           <g key={row}>
             {[0,1,2,3].map(col => (
               <line 
                 key={col}
                 x1={gridX(col) + cellW/2} 
-                y1={ySbox + 12}
+                y1={gridY(row, ySbox) + 10}
                 x2={gridX(col) + cellW/2} 
                 y2={gridY(row, yB)}
                 stroke="#94a3b8" strokeWidth="1"
