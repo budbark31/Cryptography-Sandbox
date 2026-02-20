@@ -1,244 +1,549 @@
-import DiagramNode, { Arrow, FlowRow, XorNode } from '../DiagramNode';
+import { useState } from 'react';
 
+// Based on Paar/Pelzl "Understanding Cryptography" Section 5.1.6, Fig. 5.8
 const gcmInfo = {
   overview: {
-    title: 'Galois/Counter Mode (GCM)',
-    description: 'GCM is an Authenticated Encryption with Associated Data (AEAD) mode that provides both confidentiality (via CTR mode) and authenticity (via GHASH). Standardized in NIST SP 800-38D, GCM is widely used in TLS 1.2/1.3, IPsec, and SSH. It can authenticate additional data (like headers) that remains unencrypted.',
-    formula: 'GCM = CTR_encryption + GHASH_authentication'
+    title: 'Galois Counter Mode (GCM) — Definition 5.1.6',
+    description: `GCM is an encryption mode which also computes a message authentication code (MAC). A MAC provides a cryptographic checksum computed by the sender and appended to the message.
+
+GCM protects the confidentiality of the plaintext x by using encryption in counter mode. Additionally, GCM protects not only the authenticity of the plaintext x but also the authenticity of a string AAD called additional authenticated data.
+
+This authenticated data is left in clear in this mode of operation. In practice, the string AAD might include addresses and parameters in a network protocol.`,
+    formula: 'GCM = CTR encryption + GHASH authentication'
   },
-  iv: {
-    title: 'Initialization Vector (IV/Nonce)',
-    description: 'GCM IVs are typically 96 bits (12 bytes). The counter for CTR mode is constructed as: IV || 0³¹1 for the first block (used for tag), IV || 0³¹2 for encrypting the first plaintext block, etc. IV reuse is catastrophic—it enables both plaintext recovery and authentication key recovery.',
-    formula: 'Counter₀ = IV || 0³¹1, Counterᵢ = IV || 0³¹(i+1)'
+  counter0: {
+    title: 'Initial Counter CTR₀',
+    description: `CTR₀ is derived from the IV and a serial number. It is NOT used for plaintext encryption — it is reserved for computing the final authentication tag.
+
+The counter CTR₁ = CTR₀ + 1 is used for encrypting the first plaintext block.
+
+The string (IV||CTR₁) does not have to be kept secret — it can be sent to the receiver together with the first ciphertext block.`,
+    formula: 'CTR₀ derived from IV, used only for tag generation'
   },
-  hashKey: {
-    title: 'Hash Subkey (H)',
-    description: 'The authentication key for GHASH, computed by encrypting the all-zero block: H = eₖ(0¹²⁸). This key is fixed for a given encryption key and used for all GHASH polynomial multiplications. H must remain secret—its compromise allows forgery of authentication tags.',
-    formula: 'H = eₖ(0¹²⁸) ∈ GF(2¹²⁸)'
+  counterIncrement: {
+    title: 'Counter Increment (incr)',
+    description: `For every block that is encrypted during the session, the counter is incremented but the IV stays the same.
+
+With a 32-bit counter and 128-bit blocks, we can encrypt up to 2³² blocks = 2³⁵ bytes ≈ 32 GB before needing a new IV.`,
+    formula: 'CTRᵢ = CTR₀ + i'
+  },
+  encrypt: {
+    title: 'Block Cipher eₖ',
+    description: `The block cipher encrypts the counter value to produce the key stream. Only the encryption function e() is used in encryption mode.
+
+GCM allows for precomputation of the block cipher function if the initialization vector is known ahead of time. This is useful for low-latency applications.
+
+Note that the underlying block cipher is only used in encryption mode.`,
+    formula: 'sᵢ = eₖ(CTRᵢ)'
+  },
+  xorPlaintext: {
+    title: 'XOR with Plaintext (⊕)',
+    description: `The block cipher output is XORed with plaintext to produce ciphertext. This is standard CTR mode encryption.
+
+yᵢ = eₖ(CTRᵢ) ⊕ xᵢ, i ≥ 1
+
+For decryption, the same operation is used:
+xᵢ = eₖ(CTRᵢ) ⊕ yᵢ`,
+    formula: 'yᵢ = eₖ(CTR₀ + i) ⊕ xᵢ'
+  },
+  plaintext: {
+    title: 'Plaintext Block xᵢ',
+    description: `The plaintext blocks to encrypt. Like CTR mode, GCM can handle partial final blocks without padding.
+
+Encryption is fully parallelizable since each block only depends on its counter value.`,
+    formula: 'x = (x₁, x₂, ..., xₙ)'
+  },
+  ciphertext: {
+    title: 'Ciphertext Block yᵢ',
+    description: `The encrypted ciphertext blocks. These are also fed into the authentication (GHASH) computation to ensure integrity.
+
+Any modification to the ciphertext will cause the authentication tag verification to fail.`,
+    formula: 'yᵢ = xᵢ ⊕ eₖ(CTRᵢ)'
   },
   aad: {
     title: 'Additional Authenticated Data (AAD)',
-    description: 'Data that is authenticated but NOT encrypted—useful for headers, metadata, or routing information that must be readable but tamper-proof. The AAD is included in the GHASH computation, so any modification will cause authentication to fail. AAD can be empty.',
-    formula: 'AAD is authenticated: T = f(AAD, C, len(AAD), len(C))'
+    description: `The AAD is data that is authenticated but NOT encrypted. It is useful for protecting headers, addresses, and protocol parameters that must remain readable but tamper-proof.
+
+In practice, the string AAD might include addresses and parameters in a network protocol.
+
+g₀ = AAD × H (where × is Galois field multiplication)`,
+    formula: 'g₀ = AAD × H'
   },
-  ctrEncrypt: {
-    title: 'CTR Mode Encryption',
-    description: 'Plaintext is encrypted using standard CTR mode with incrementing counters. The counter starts at 2 (counter 1 is reserved for generating the final authentication tag). CTR provides confidentiality and enables parallel encryption/decryption with random access.',
-    formula: 'yᵢ = xᵢ ⊕ eₖ(IV || CTRᵢ), CTRᵢ = i + 1'
+  hashSubkey: {
+    title: 'Hash Subkey H',
+    description: `H is a hash subkey which is generated by encryption of the all-zero input with the block cipher.
+
+H = eₖ(0)
+
+All multiplications are in the 128-bit Galois field GF(2¹²⁸) with the irreducible polynomial P(x) = x¹²⁸ + x⁷ + x² + x + 1.
+
+Since only one multiplication is required per block cipher encryption, the GCM mode adds very little computational overhead to the encryption.`,
+    formula: 'H = eₖ(0), used in GF(2¹²⁸)'
   },
-  ghash: {
-    title: 'GHASH Function',
-    description: 'A universal hash function based on polynomial evaluation in the Galois field GF(2¹²⁸). GHASH processes AAD blocks, then ciphertext blocks, then length block, each time multiplying by H and XORing with the next input. The multiplication uses the irreducible polynomial x¹²⁸ + x⁷ + x² + x + 1.',
-    formula: 'GHASHₕ(X₁,...,Xₘ) = X₁·H^m ⊕ X₂·H^(m-1) ⊕ ... ⊕ Xₘ·H'
+  ghashXor: {
+    title: 'GHASH XOR Step (⊕)',
+    description: `For authentication, GCM performs a chained Galois field multiplication. For every ciphertext yᵢ, an intermediate authentication parameter gᵢ is derived.
+
+gᵢ is computed as the XOR sum of the current ciphertext yᵢ and gᵢ₋₁, then multiplied by the constant H.
+
+This chaining ensures that any modification to any ciphertext block will propagate through and change the final tag.`,
+    formula: 'gᵢ = (gᵢ₋₁ ⊕ yᵢ) × H, 1 ≤ i ≤ n'
   },
-  gfMult: {
-    title: 'Galois Field Multiplication',
-    description: 'Multiplication in GF(2¹²⁸) with the reducing polynomial x¹²⁸ + x⁷ + x² + x + 1. Each step of GHASH XORs the current input with the running hash, then multiplies by H. This requires efficient hardware/software implementation—modern CPUs include special instructions (PCLMULQDQ for Intel).',
-    formula: '(A · B) mod (x¹²⁸ + x⁷ + x² + x + 1)'
+  ghashMult: {
+    title: 'Galois Field Multiplication (×H)',
+    description: `Multiplication in the Galois field GF(2¹²⁸) with the irreducible polynomial:
+P(x) = x¹²⁸ + x⁷ + x² + x + 1
+
+Since only one multiplication is required per block cipher encryption, the GCM mode adds very little computational overhead to the encryption.
+
+Modern CPUs include special instructions (PCLMULQDQ for Intel/AMD) for efficient GF multiplication.`,
+    formula: 'gᵢ = (gᵢ₋₁ ⊕ yᵢ) × H in GF(2¹²⁸)'
   },
-  xorAuth: {
-    title: 'XOR into Authentication',
-    description: 'The ciphertext is XORed into the running GHASH computation. This binds the ciphertext to the authentication tag—any modification to ciphertext will result in a different GHASH output and authentication failure. The XOR-multiply sequence is efficient for streaming authentication.',
-    formula: 'Sᵢ = (Sᵢ₋₁ ⊕ yᵢ) · H'
-  },
-  lengthBlock: {
-    title: 'Length Block',
-    description: 'The final GHASH input is a 128-bit block containing the bit lengths of AAD and ciphertext: [len(AAD)]₆₄ || [len(C)]₆₄. This prevents length extension attacks and ensures the tag is bound to the exact message length. Both lengths are encoded as 64-bit big-endian integers.',
-    formula: 'L = [len(A)]₆₄ || [len(C)]₆₄'
-  },
-  tag: {
-    title: 'Authentication Tag (T)',
-    description: 'The final 128-bit (or truncated) authentication tag. Computed as: T = GHASH(AAD, C, len) ⊕ eₖ(IV || 0³¹1). The encryption of IV||0³¹1 masks the GHASH output, preventing algebraic attacks on the GHASH key H. Tags are typically 128, 120, 112, 104, or 96 bits.',
-    formula: 'T = GHASHₕ(A, C, L) ⊕ eₖ(IV || 0³¹1)'
+  authTag: {
+    title: 'Authentication Tag T',
+    description: `The final authentication tag T is computed as:
+T = (gₙ × H) ⊕ eₖ(CTR₀)
+
+The XOR with eₖ(CTR₀) masks the GHASH output, preventing algebraic attacks on the hash subkey H.
+
+The receiver decrypts the ciphertext using Counter mode. To check authenticity, the receiver computes T' using the received ciphertext and AAD. If T and T' match, the receiver is assured that the ciphertext (and AAD) were not manipulated and only the sender could have generated the message.`,
+    formula: 'T = (gₙ × H) ⊕ eₖ(CTR₀)'
   },
   security: {
     title: 'GCM Security Properties',
-    description: 'GCM provides IND-CPA confidentiality and INT-CTXT integrity. Security degrades with message volume: after 2³² blocks under one key, a birthday-bound attack becomes practical. GCM is NOT nonce-misuse resistant—IV reuse enables full plaintext recovery AND authentication key recovery (forgery). For nonce-misuse resistance, consider AES-GCM-SIV.',
-    formula: 'Security: 2^(t/2) tag forgery, 2^64 block confidentiality limit'
+    description: `GCM provides AEAD (Authenticated Encryption with Associated Data):
+• Confidentiality via CTR mode encryption
+• Integrity via GHASH authentication
+• AAD authentication for headers/metadata
+
+Critical: NEVER reuse (key, IV) pair. IV reuse enables both plaintext recovery AND authentication key (H) recovery, allowing forgery.
+
+For applications requiring nonce-misuse resistance, consider AES-GCM-SIV.`,
+    formula: 'GCM = Authenticated Encryption with Associated Data'
   }
 };
 
+// Reusable SVG components
+const ArrowHead = ({ x, y, direction = 'right' }) => {
+  const rotations = { right: 0, down: 90, left: 180, up: -90 };
+  return (
+    <polygon
+      points="-6,-4 0,0 -6,4"
+      transform={`translate(${x},${y}) rotate(${rotations[direction]})`}
+      fill="#64748b"
+    />
+  );
+};
+
+const XorCircle = ({ cx, cy, onMouseEnter, onMouseLeave, hovered, small = false }) => {
+  const r = small ? 10 : 12;
+  return (
+    <g onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} style={{ cursor: 'pointer' }}>
+      <circle 
+        cx={cx} cy={cy} r={r} 
+        fill={hovered ? '#dbeafe' : '#f8fafc'}
+        stroke={hovered ? '#3b82f6' : '#64748b'} 
+        strokeWidth="2" 
+      />
+      <text x={cx} y={cy + 4} textAnchor="middle" className="fill-slate-700" style={{ fontSize: small ? '12px' : '14px' }}>⊕</text>
+    </g>
+  );
+};
+
+const MultCircle = ({ cx, cy, onMouseEnter, onMouseLeave, hovered }) => (
+  <g onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} style={{ cursor: 'pointer' }}>
+    <circle 
+      cx={cx} cy={cy} r="10" 
+      fill={hovered ? '#fef3c7' : '#f8fafc'}
+      stroke={hovered ? '#f59e0b' : '#64748b'} 
+      strokeWidth="2" 
+    />
+    <text x={cx} y={cy + 4} textAnchor="middle" className="fill-slate-700" style={{ fontSize: '12px' }}>×</text>
+  </g>
+);
+
 export default function GCMDiagram({ onHover }) {
+  const [hovered, setHovered] = useState(null);
+
+  const handleHover = (key) => {
+    setHovered(key);
+    if (onHover && gcmInfo[key]) {
+      onHover(gcmInfo[key]);
+    }
+  };
+
+  const boxStyle = (key) => ({
+    fill: hovered === key ? '#dbeafe' : '#f8fafc',
+    stroke: hovered === key ? '#3b82f6' : '#cbd5e1',
+    strokeWidth: 2,
+    cursor: 'pointer',
+  });
+
   return (
     <div 
       className="diagram-container"
-      onMouseEnter={() => onHover && onHover(gcmInfo.overview)}
+      onMouseEnter={() => handleHover('overview')}
     >
-      {/* Header */}
-      <div className="text-center text-sm text-slate-600 font-semibold mb-4 bg-slate-200 px-4 py-2 rounded-lg">
-        Authenticated Encryption with Associated Data (AEAD)
-      </div>
-      
-      {/* Top row: AAD, Hash Key, IV */}
-      <FlowRow>
-        <DiagramNode type="auth" info={gcmInfo.aad} onHover={onHover}>
-          AAD
-        </DiagramNode>
-        <div className="w-8" />
-        <DiagramNode type="key" info={gcmInfo.hashKey} onHover={onHover}>
-          H = eₖ(0)
-        </DiagramNode>
-        <div className="w-8" />
-        <DiagramNode type="key" info={gcmInfo.iv} onHover={onHover}>
-          IV
-        </DiagramNode>
-      </FlowRow>
-      
-      <Arrow direction="down" />
-      
-      {/* Two parallel paths: GHASH and CTR */}
-      <div className="flex gap-12">
-        {/* GHASH Path (Authentication) */}
-        <div className="flex flex-col items-center bg-orange-50 p-4 rounded-xl border border-orange-200">
-          <div className="text-xs text-orange-600 font-semibold mb-3">AUTHENTICATION PATH</div>
-          
-          <DiagramNode type="auth" info={gcmInfo.gfMult} onHover={onHover}>
-            GF(2¹²⁸) Mult
-          </DiagramNode>
-          
-          <Arrow direction="down" />
-          
-          <FlowRow>
-            <XorNode info={gcmInfo.xorAuth} onHover={onHover} />
-            <Arrow direction="left" />
-            <span className="text-xs text-slate-500">← y₁</span>
-          </FlowRow>
-          
-          <Arrow direction="down" />
-          
-          <DiagramNode type="auth" info={gcmInfo.ghash} onHover={onHover}>
-            × H (GHASH)
-          </DiagramNode>
-          
-          <Arrow direction="down" />
-          
-          <FlowRow>
-            <XorNode info={gcmInfo.xorAuth} onHover={onHover} />
-            <Arrow direction="left" />
-            <span className="text-xs text-slate-500">← y₂</span>
-          </FlowRow>
-          
-          <Arrow direction="down" />
-          
-          <DiagramNode type="auth" info={gcmInfo.ghash} onHover={onHover}>
-            × H
-          </DiagramNode>
-          
-          <Arrow direction="down" />
-          
-          <FlowRow>
-            <XorNode info={gcmInfo.xorAuth} onHover={onHover} />
-            <Arrow direction="left" />
-            <DiagramNode type="internal" info={gcmInfo.lengthBlock} onHover={onHover} className="text-xs">
-              len(A)||len(C)
-            </DiagramNode>
-          </FlowRow>
-          
-          <Arrow direction="down" />
-          
-          <DiagramNode type="auth" info={gcmInfo.ghash} onHover={onHover}>
-            × H (final)
-          </DiagramNode>
-        </div>
+      <svg viewBox="0 0 560 420" className="w-full max-w-5xl mx-auto">
+        {/* Title */}
+        <text x="280" y="15" textAnchor="middle" className="text-xs fill-slate-500 font-medium">
+          Fig. 5.8 — Basic authenticated encryption in Galois Counter mode
+        </text>
+
+        {/* ========== TOP ROW: COUNTER CHAIN ========== */}
         
-        {/* CTR Path (Encryption) */}
-        <div className="flex flex-col items-center bg-blue-50 p-4 rounded-xl border border-blue-200">
-          <div className="text-xs text-blue-600 font-semibold mb-3">ENCRYPTION PATH (CTR)</div>
-          
-          <FlowRow>
-            <DiagramNode type="key" info={gcmInfo.ctrEncrypt} onHover={onHover} className="text-xs">
-              IV||CTR₁
-            </DiagramNode>
-            <div className="w-4" />
-            <DiagramNode type="key" info={gcmInfo.ctrEncrypt} onHover={onHover} className="text-xs">
-              IV||CTR₂
-            </DiagramNode>
-          </FlowRow>
-          
-          <FlowRow>
-            <Arrow direction="down" />
-            <div className="w-16" />
-            <Arrow direction="down" />
-          </FlowRow>
-          
-          <FlowRow>
-            <DiagramNode type="function" info={gcmInfo.ctrEncrypt} onHover={onHover}>
-              eₖ()
-            </DiagramNode>
-            <div className="w-4" />
-            <DiagramNode type="function" info={gcmInfo.ctrEncrypt} onHover={onHover}>
-              eₖ()
-            </DiagramNode>
-          </FlowRow>
-          
-          <FlowRow>
-            <Arrow direction="down" />
-            <div className="w-16" />
-            <Arrow direction="down" />
-          </FlowRow>
-          
-          <FlowRow>
-            <XorNode info={gcmInfo.ctrEncrypt} onHover={onHover} />
-            <Arrow direction="left" />
-            <DiagramNode type="plaintext" info={gcmInfo.ctrEncrypt} onHover={onHover} className="min-w-[40px]">
-              x₁
-            </DiagramNode>
-            <div className="w-2" />
-            <XorNode info={gcmInfo.ctrEncrypt} onHover={onHover} />
-            <Arrow direction="left" />
-            <DiagramNode type="plaintext" info={gcmInfo.ctrEncrypt} onHover={onHover} className="min-w-[40px]">
-              x₂
-            </DiagramNode>
-          </FlowRow>
-          
-          <FlowRow>
-            <Arrow direction="down" className="ml-[-30px]" />
-            <div className="w-24" />
-            <Arrow direction="down" className="ml-[-30px]" />
-          </FlowRow>
-          
-          <FlowRow>
-            <DiagramNode type="ciphertext" info={gcmInfo.ctrEncrypt} onHover={onHover} className="min-w-[40px]">
-              y₁
-            </DiagramNode>
-            <div className="w-8" />
-            <DiagramNode type="ciphertext" info={gcmInfo.ctrEncrypt} onHover={onHover} className="min-w-[40px]">
-              y₂
-            </DiagramNode>
-          </FlowRow>
-        </div>
-      </div>
-      
-      {/* Final tag computation */}
-      <Arrow direction="down" />
-      
-      <FlowRow>
-        <span className="text-xs text-slate-500 mr-2">GHASH output →</span>
-        <XorNode info={gcmInfo.tag} onHover={onHover} />
-        <Arrow direction="left" />
-        <DiagramNode type="function" info={gcmInfo.tag} onHover={onHover} className="text-xs">
-          eₖ(IV||0³¹1)
-        </DiagramNode>
-      </FlowRow>
-      
-      <Arrow direction="down" />
-      
-      <FlowRow>
-        <DiagramNode 
-          type="auth" 
-          info={gcmInfo.tag} 
-          onHover={onHover}
-          className="bg-gradient-to-r from-orange-500 to-red-500"
+        {/* CTR₀ box */}
+        <g onMouseEnter={() => handleHover('counter0')} onMouseLeave={() => setHovered(null)}>
+          <rect x="25" y="30" width="55" height="24" rx="3" style={boxStyle('counter0')} />
+          <text x="52" y="46" textAnchor="middle" className="text-xs fill-slate-600 font-mono">CTR₀</text>
+        </g>
+        
+        {/* Arrow to incr */}
+        <line x1="80" y1="42" x2="100" y2="42" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={100} y={42} direction="right" />
+        
+        {/* incr oval */}
+        <g onMouseEnter={() => handleHover('counterIncrement')} onMouseLeave={() => setHovered(null)}>
+          <ellipse cx="125" cy="42" rx="22" ry="12" fill="#f8fafc" stroke="#64748b" strokeWidth="1.5" style={{ cursor: 'pointer' }} />
+          <text x="125" y="46" textAnchor="middle" className="text-xs fill-slate-600">incr</text>
+        </g>
+        
+        {/* Arrow to CTR₀+1 */}
+        <line x1="147" y1="42" x2="175" y2="42" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={175} y={42} direction="right" />
+        
+        {/* CTR₀+1 box */}
+        <g onMouseEnter={() => handleHover('counterIncrement')} onMouseLeave={() => setHovered(null)}>
+          <rect x="178" y="30" width="65" height="24" rx="3" style={boxStyle('counterIncrement')} />
+          <text x="210" y="46" textAnchor="middle" className="text-xs fill-slate-600 font-mono">CTR₀+1</text>
+        </g>
+        
+        {/* Arrow to incr */}
+        <line x1="243" y1="42" x2="263" y2="42" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={263} y={42} direction="right" />
+        
+        {/* incr oval */}
+        <g onMouseEnter={() => handleHover('counterIncrement')} onMouseLeave={() => setHovered(null)}>
+          <ellipse cx="288" cy="42" rx="22" ry="12" fill="#f8fafc" stroke="#64748b" strokeWidth="1.5" style={{ cursor: 'pointer' }} />
+          <text x="288" y="46" textAnchor="middle" className="text-xs fill-slate-600">incr</text>
+        </g>
+        
+        {/* Dots ... */}
+        <text x="355" y="46" textAnchor="middle" className="text-sm fill-slate-400">· · · · ·</text>
+        
+        {/* Arrow to CTR₀+n */}
+        <line x1="400" y1="42" x2="430" y2="42" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={430} y={42} direction="right" />
+        
+        {/* CTR₀+n box */}
+        <g onMouseEnter={() => handleHover('counterIncrement')} onMouseLeave={() => setHovered(null)}>
+          <rect x="433" y="30" width="65" height="24" rx="3" style={boxStyle('counterIncrement')} />
+          <text x="465" y="46" textAnchor="middle" className="text-xs fill-slate-600 font-mono">CTR₀+n</text>
+        </g>
+
+        {/* ========== ENCRYPTION BOXES (eₖ) ========== */}
+        
+        {/* Arrow down from CTR₀ */}
+        <line x1="52" y1="54" x2="52" y2="68" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={52} y={68} direction="down" />
+        
+        {/* eₖ box for CTR₀ */}
+        <g onMouseEnter={() => handleHover('encrypt')} onMouseLeave={() => setHovered(null)}>
+          <rect x="30" y="70" width="44" height="26" rx="4" style={boxStyle('encrypt')} />
+          <text x="52" y="87" textAnchor="middle" className="text-sm fill-slate-700 font-mono" style={{ fontStyle: 'italic' }}>eₖ</text>
+        </g>
+        
+        {/* Arrow down from CTR₀+1 */}
+        <line x1="210" y1="54" x2="210" y2="68" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={210} y={68} direction="down" />
+        
+        {/* eₖ box for CTR₀+1 */}
+        <g onMouseEnter={() => handleHover('encrypt')} onMouseLeave={() => setHovered(null)}>
+          <rect x="188" y="70" width="44" height="26" rx="4" style={boxStyle('encrypt')} />
+          <text x="210" y="87" textAnchor="middle" className="text-sm fill-slate-700 font-mono" style={{ fontStyle: 'italic' }}>eₖ</text>
+        </g>
+        
+        {/* Arrow down from CTR₀+n */}
+        <line x1="465" y1="54" x2="465" y2="68" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={465} y={68} direction="down" />
+        
+        {/* eₖ box for CTR₀+n */}
+        <g onMouseEnter={() => handleHover('encrypt')} onMouseLeave={() => setHovered(null)}>
+          <rect x="443" y="70" width="44" height="26" rx="4" style={boxStyle('encrypt')} />
+          <text x="465" y="87" textAnchor="middle" className="text-sm fill-slate-700 font-mono" style={{ fontStyle: 'italic' }}>eₖ</text>
+        </g>
+
+        {/* ========== XOR WITH PLAINTEXT ========== */}
+        
+        {/* x₁ from left */}
+        <text 
+          x="168" y="120" 
+          textAnchor="middle" 
+          className="text-sm fill-slate-700 font-mono cursor-pointer"
+          style={{ fontStyle: 'italic' }}
+          onMouseEnter={() => handleHover('plaintext')}
+          onMouseLeave={() => setHovered(null)}
         >
-          Auth Tag (T)
-        </DiagramNode>
-      </FlowRow>
-      
+          x₁
+        </text>
+        <line x1="178" y1="115" x2="197" y2="115" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={197} y={115} direction="right" />
+        
+        {/* Arrow down from eₖ(CTR₀+1) */}
+        <line x1="210" y1="96" x2="210" y2="102" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={210} y={102} direction="down" />
+        
+        {/* XOR circle for x₁ */}
+        <XorCircle 
+          cx={210} cy={115} 
+          hovered={hovered === 'xorPlaintext'}
+          onMouseEnter={() => handleHover('xorPlaintext')}
+          onMouseLeave={() => setHovered(null)}
+          small={true}
+        />
+        
+        {/* xₙ from left */}
+        <text 
+          x="423" y="120" 
+          textAnchor="middle" 
+          className="text-sm fill-slate-700 font-mono cursor-pointer"
+          style={{ fontStyle: 'italic' }}
+          onMouseEnter={() => handleHover('plaintext')}
+          onMouseLeave={() => setHovered(null)}
+        >
+          xₙ
+        </text>
+        <line x1="433" y1="115" x2="452" y2="115" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={452} y={115} direction="right" />
+        
+        {/* Arrow down from eₖ(CTR₀+n) */}
+        <line x1="465" y1="96" x2="465" y2="102" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={465} y={102} direction="down" />
+        
+        {/* XOR circle for xₙ */}
+        <XorCircle 
+          cx={465} cy={115} 
+          hovered={hovered === 'xorPlaintext'}
+          onMouseEnter={() => handleHover('xorPlaintext')}
+          onMouseLeave={() => setHovered(null)}
+          small={true}
+        />
+
+        {/* ========== CIPHERTEXT BOXES ========== */}
+        
+        {/* Arrow down to y₁ */}
+        <line x1="210" y1="127" x2="210" y2="140" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={210} y={140} direction="down" />
+        
+        {/* y₁ box */}
+        <g onMouseEnter={() => handleHover('ciphertext')} onMouseLeave={() => setHovered(null)}>
+          <rect x="190" y="143" width="40" height="22" rx="3" style={boxStyle('ciphertext')} />
+          <text x="210" y="158" textAnchor="middle" className="text-sm fill-slate-700 font-mono" style={{ fontStyle: 'italic' }}>y₁</text>
+        </g>
+        
+        {/* Arrow down to yₙ */}
+        <line x1="465" y1="127" x2="465" y2="140" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={465} y={140} direction="down" />
+        
+        {/* yₙ box */}
+        <g onMouseEnter={() => handleHover('ciphertext')} onMouseLeave={() => setHovered(null)}>
+          <rect x="445" y="143" width="40" height="22" rx="3" style={boxStyle('ciphertext')} />
+          <text x="465" y="158" textAnchor="middle" className="text-sm fill-slate-700 font-mono" style={{ fontStyle: 'italic' }}>yₙ</text>
+        </g>
+
+        {/* ========== AUTHENTICATION CHAIN ========== */}
+        
+        {/* AAD label - positioned to the left of y₁ */}
+        <text 
+          x="100" y="158" 
+          textAnchor="middle" 
+          className="text-sm fill-slate-600 font-mono cursor-pointer"
+          style={{ fontStyle: 'italic' }}
+          onMouseEnter={() => handleHover('aad')}
+          onMouseLeave={() => setHovered(null)}
+        >
+          AAD
+        </text>
+        
+        {/* Arrow down from AAD to first × */}
+        <line x1="100" y1="165" x2="100" y2="185" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={100} y={185} direction="down" />
+        
+        {/* H → first multiplication */}
+        <text 
+          x="55" y="205" 
+          textAnchor="middle" 
+          className="text-sm fill-amber-600 font-mono cursor-pointer"
+          style={{ fontStyle: 'italic' }}
+          onMouseEnter={() => handleHover('hashSubkey')}
+          onMouseLeave={() => setHovered(null)}
+        >
+          H
+        </text>
+        <line x1="65" y1="200" x2="87" y2="200" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={87} y={200} direction="right" />
+        
+        {/* First × (AAD × H = g₀) */}
+        <MultCircle 
+          cx={100} cy={200} 
+          hovered={hovered === 'ghashMult'}
+          onMouseEnter={() => handleHover('ghashMult')}
+          onMouseLeave={() => setHovered(null)}
+        />
+        
+        {/* g₀ label */}
+        <text x="120" y="200" textAnchor="start" className="text-xs fill-slate-500 font-mono">g₀</text>
+        
+        {/* Arrow from g₀ to first ⊕ */}
+        <line x1="110" y1="200" x2="145" y2="200" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={145} y={200} direction="right" />
+        
+        {/* First ⊕ (g₀ ⊕ y₁) */}
+        <XorCircle 
+          cx={160} cy={200} 
+          hovered={hovered === 'ghashXor'}
+          onMouseEnter={() => handleHover('ghashXor')}
+          onMouseLeave={() => setHovered(null)}
+          small={true}
+        />
+        
+        {/* Arrow down from y₁ to first ⊕ */}
+        <line x1="210" y1="165" x2="210" y2="200" stroke="#64748b" strokeWidth="1.5" />
+        <line x1="210" y1="200" x2="172" y2="200" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={172} y={200} direction="left" />
+        
+        {/* ẑ₁ arrow down from first ⊕ to second × */}
+        <line x1="160" y1="212" x2="160" y2="253" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={160} y={253} direction="down" />
+        
+        {/* ẑ₁ label */}
+        <text x="172" y="238" textAnchor="start" className="text-xs fill-slate-500 font-mono">ẑ₁</text>
+        
+        {/* H → second multiplication */}
+        <text 
+          x="115" y="273" 
+          textAnchor="middle" 
+          className="text-sm fill-amber-600 font-mono cursor-pointer"
+          style={{ fontStyle: 'italic' }}
+          onMouseEnter={() => handleHover('hashSubkey')}
+          onMouseLeave={() => setHovered(null)}
+        >
+          H
+        </text>
+        <line x1="125" y1="268" x2="147" y2="268" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={147} y={268} direction="right" />
+        
+        {/* Second × */}
+        <MultCircle 
+          cx={160} cy={268} 
+          hovered={hovered === 'ghashMult'}
+          onMouseEnter={() => handleHover('ghashMult')}
+          onMouseLeave={() => setHovered(null)}
+        />
+        
+        {/* Arrow to dots */}
+        <line x1="170" y1="268" x2="215" y2="268" stroke="#64748b" strokeWidth="1.5" />
+        
+        {/* Dots */}
+        <text x="265" y="273" textAnchor="middle" className="text-sm fill-slate-400">· · · · · · ·</text>
+        
+        {/* Arrow from dots to gₙ₋₁ */}
+        <line x1="315" y1="268" x2="365" y2="268" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={365} y={268} direction="right" />
+        
+        {/* gₙ₋₁ label */}
+        <text x="340" y="288" textAnchor="middle" className="text-xs fill-slate-500 font-mono">gₙ₋₁</text>
+        
+        {/* ⊕ for gₙ₋₁ ⊕ yₙ */}
+        <XorCircle 
+          cx={380} cy={268} 
+          hovered={hovered === 'ghashXor'}
+          onMouseEnter={() => handleHover('ghashXor')}
+          onMouseLeave={() => setHovered(null)}
+          small={true}
+        />
+        
+        {/* Arrow down from yₙ to ⊕ */}
+        <line x1="465" y1="165" x2="465" y2="248" stroke="#64748b" strokeWidth="1.5" />
+        <line x1="465" y1="248" x2="392" y2="268" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={392} y={268} direction="left" />
+        
+        {/* gₙ label */}
+        <text x="405" y="273" textAnchor="start" className="text-xs fill-slate-500 font-mono">gₙ</text>
+        
+        {/* Arrow down from ⊕ to final × */}
+        <line x1="380" y1="280" x2="380" y2="328" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={380} y={328} direction="down" />
+        
+        {/* H → final multiplication */}
+        <text 
+          x="335" y="348" 
+          textAnchor="middle" 
+          className="text-sm fill-amber-600 font-mono cursor-pointer"
+          style={{ fontStyle: 'italic' }}
+          onMouseEnter={() => handleHover('hashSubkey')}
+          onMouseLeave={() => setHovered(null)}
+        >
+          H
+        </text>
+        <line x1="345" y1="343" x2="367" y2="343" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={367} y={343} direction="right" />
+        
+        {/* Final × */}
+        <MultCircle 
+          cx={380} cy={343} 
+          hovered={hovered === 'ghashMult'}
+          onMouseEnter={() => handleHover('ghashMult')}
+          onMouseLeave={() => setHovered(null)}
+        />
+        
+        {/* Arrow to final ⊕ */}
+        <line x1="390" y1="343" x2="425" y2="343" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={425} y={343} direction="right" />
+        
+        {/* Final ⊕ (with eₖ(CTR₀)) */}
+        <XorCircle 
+          cx={440} cy={343} 
+          hovered={hovered === 'authTag'}
+          onMouseEnter={() => handleHover('authTag')}
+          onMouseLeave={() => setHovered(null)}
+        />
+        
+        {/* Line from eₖ(CTR₀) down and across to final ⊕ */}
+        <line x1="52" y1="96" x2="52" y2="380" stroke="#64748b" strokeWidth="1.5" />
+        <line x1="52" y1="380" x2="440" y2="380" stroke="#64748b" strokeWidth="1.5" />
+        <line x1="440" y1="380" x2="440" y2="355" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={440} y={355} direction="up" />
+        
+        {/* Arrow down to T */}
+        <line x1="440" y1="355" x2="440" y2="343" stroke="#64748b" strokeWidth="0" />  {/* hidden */}
+        <line x1="452" y1="343" x2="510" y2="343" stroke="#64748b" strokeWidth="1.5" />
+        <line x1="510" y1="343" x2="510" y2="395" stroke="#64748b" strokeWidth="1.5" />
+        <ArrowHead x={510} y={395} direction="down" />
+        
+        {/* T label */}
+        <text 
+          x="510" y="412" 
+          textAnchor="middle" 
+          className="text-sm fill-orange-600 font-bold cursor-pointer"
+          onMouseEnter={() => handleHover('authTag')}
+          onMouseLeave={() => setHovered(null)}
+        >
+          T
+        </text>
+      </svg>
+
+      {/* Key insight note */}
       <div 
-        className="mt-4 p-3 bg-emerald-100 border border-emerald-300 rounded-lg text-xs text-emerald-700 text-center max-w-lg cursor-pointer"
-        onMouseEnter={() => onHover && onHover(gcmInfo.security)}
+        className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-100 transition-colors"
+        onMouseEnter={() => handleHover('security')}
+        onMouseLeave={() => setHovered(null)}
       >
-        <strong>GCM Output:</strong> (Ciphertext, Tag) — Receiver verifies tag before decrypting. Tag failure = reject entire message.
+        <h4 className="text-sm font-semibold text-emerald-800 mb-2">AEAD: Authenticated Encryption with Associated Data</h4>
+        <p className="text-xs text-emerald-700">
+          GCM provides both <strong>confidentiality</strong> (CTR encryption) and <strong>authenticity</strong> (GHASH tag).
+          The receiver verifies tag T before decrypting. If T doesn't match, reject the entire message.
+        </p>
       </div>
     </div>
   );
